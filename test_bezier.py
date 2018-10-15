@@ -49,14 +49,22 @@ class TestBezier(unittest.TestCase):
         self.assertEqual(test_l, ref_l)
         self.assertEqual(test_r, ref_r)
 
-    # def test_curv(self):
-        # p0 = CtrlPoint((0, 0), weight=1)
-        # p1 = CtrlPoint((4, 3), weight=2)
-        # p2 = CtrlPoint((0, 5), weight=4)
+    def test_curvature(self):
+        ref = np.array([
+            0.134164,
+            0.219124,
+            0.340136,
+            0.471343,
+            0.566666,
+            0.625815,
+            0.713340,
+            0.904176,
+            1.155625,
+            1.095216,
+            0.670820])
+        test = np.array([self.b1.curvature(t=t) for t in np.linspace(0.0, 1.0, num=11)])
 
-        # b = Bezier((p0, p1, p2))
-
-        # b.curvature(t=0)
+        self.assertTrue(np.allclose(test, ref))
 
 
 if __name__ == '__main__':
