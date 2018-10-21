@@ -1,6 +1,7 @@
 import numpy as np
+from scipy import optimize
+from scipy.linalg import norm
 from scipy.special import binom
-from scipy.linalg import norm, solve
 
 from .ctrl_point import CtrlPoint
 
@@ -56,41 +57,29 @@ class Bezier:
     def ctrl_points(self, points):
         self._ctrl_points = [CtrlPoint(p) for p in points]
 
-    # @property
-    # def derivative(self):
-        # """Calculate derivative Bezier curve
+    @property
+    def derivative(self):
+        """Calculate derivative Bezier curve
 
-        # References
-        # ----------
-        # .. [1] Thomas W. Sederberg, "COMPUTER AIDED GEOMETRIC DESIGN"
-        #    BYU, p. 30, 2014.
+        References
+        ----------
+        .. [1] Thomas W. Sederberg, "COMPUTER AIDED GEOMETRIC DESIGN"
+           BYU, p. 30, 2014.
 
-        # """
+        """
 
-        # # cpts = np.stack([p() for p in self.ctrl_points])
+        # cpts = np.stack([p() for p in self.ctrl_points])
 
-        # # print(np.diff(cpts, axis=0))
+        # print(np.diff(cpts, axis=0))
 
-        # for i in range(self.deg):
-        #     p1 = self.ctrl_points[i+1]
-        #     p0 = self.ctrl_points[i]
-        #     p = self.deg * (p1.weight / p0.weight) * (p1 - p0)
-        #     print(p)
+        cps = []
+        for i in range(self.deg):
+            p1 = self.ctrl_points[i+1]
+            p0 = self.ctrl_points[i]
+            p = (self.deg-1) * (p1.weight / p0.weight) * (p1 - p0)
+            cps.append(p)
 
-    # @property
-    # def hodograph(self):
-    #     """Calculate hodograph Bezier curve
-
-    #     References
-    #     ----------
-    #     .. [1] Thomas W. Sederberg, "COMPUTER AIDED GEOMETRIC DESIGN"
-    #        BYU, p. 31, 2014.
-
-    #     """
-
-    #     cpts = [np.array(self[i+1]) - np.array(self[i]) for i in range(self.deg)]
-
-    #     return Bezier(cpts)
+        return Bezier(cps)
 
     def point(self, t):
         """Evaluate curve at a given t value"""
@@ -143,44 +132,26 @@ class Bezier:
 
         return Bezier(points)
 
-    # def nearest_point(self, point, t_guess=0.5, tol=0.000001):
-        # """Estimate nearest pont on bezier using fmin func
+    def nearest(self, point, t_guess=0.5, tol=0.000001):
+        """Estimate nearest pont on bezier using fmin func
 
-        # Parameters
-        # ----------
-        # point : list
-        #     point coordinates to evaluate
-        # t_guess : float, optional
-        #     inital t guess
-        # tol : float, optional
-        #     stopping tolerance
-        # """
+        Parameters
+        ----------
+        point : list
+            point coordinates to evaluate
+        t_guess : float, optional
+            inital t guess
+        tol : float, optional
+            stopping tolerance
+        """
 
-        # def error_fn(t_trial, p):
-        #     return norm(p - self.point(t_trial[0]))
+        def error_fn(t_trial, p):
+            return norm(p - self.point(t_trial[0]))
 
-        # npoint = np.array(point)
-        # t = sp.optimize.minimize(error_fn, t_guess, args=(npoint,), tol=tol)
-        # return t['x'][0]
-    # def nearest_point(self, point, t_guess=0.5, tol=0.000001):
-        # """Estimate nearest pont on bezier using fmin func
+        point = np.array(point)
+        t = optimize.minimize(error_fn, t_guess, args=(point,), tol=tol)
 
-        # Parameters
-        # ----------
-        # point : list
-        #     point coordinates to evaluate
-        # t_guess : float, optional
-        #     inital t guess
-        # tol : float, optional
-        #     stopping tolerance
-        # """
-
-        # def error_fn(t_trial, p):
-        #     return scipy.linalg.norm(p - self.point(t_trial[0]))
-
-        # npoint = np.array(point)
-        # t = scipy.optimize.minimize(error_fn, t_guess, args=(npoint,), tol=tol)
-        # return t['x'][0]
+        return t['x'][0]
 
     def split(self, t):
         """Performs the de Casteljau algorithm to split the current Bezier
@@ -264,91 +235,3 @@ class Bezier:
         n = float(self.deg)
 
         return ((n-1.0)/n) * h/(a**2.0)
-
-
-def fit_bezier(pnts, deg):
-    if int(deg) < 1:
-        raise ValueError('Bezier degree must be greater than 1')
-    else:
-        deg = int(deg)
-
-    pnts = np.array(pnts)
-
-    def solve_for_cs(ds, ts, deg):
-        """Takes an input series of values (ds) and uses them to solve Ax = b
-        ds = values
-        ts = time steps between ds
-
-        """
-
-        # Create A
-        #   am, bm = [1, 4, 6, 4, 1] (binomial array for deg 4)
-        am = np.array([[binom(deg, i) for i in range(deg + 1)]])
-        bm = np.array([[binom(deg, i) for i in range(deg + 1)]]).T
-
-        # cm = matrix of 1's and -1's (based on index, e.g. for even deg: 0,0 = 1; 0,1 = -1;, 0,2 = 1, etc)
-        cm = (1 - 2*np.mod(np.sum(np.indices((deg+1, deg+1)), axis=0), 2*np.ones((deg+1, deg+1))))
-
-        # Fix for odd deg (the array needs to be flipped... -1, 1 instead of 1, -1)
-        if deg % 2:
-            cm *= -1
-
-        # A is square binomial matrix scaled by matrix of 1's and -1s (scalar of two from differentiation)
-        A = 2*am*bm*cm
-
-        # Create B
-        #   B is matrix of exponents for (t-1) [[8, 7, 6, 5, 4], [7, 6, 5, 4, 3], ...[4, 3, 2, 1, 0]]
-        B = np.zeros((deg+1, deg+1))
-        B[-1] = np.arange(deg, -1, -1)
-
-        for i in range(deg - 1, -1, -1):
-            B[i] = B[i+1] + 1
-
-        # Create C
-        #   C is matrix of exponents for t [[0, 1, 2, 3, 4], [1, 2, 3, 4, 5], ...[4, 5, 6, 7, 8]]
-        C = np.zeros((deg+1, deg+1))
-        C[0] = np.arange(deg + 1)
-
-        for i in range(deg):
-            C[i+1] = C[i] + 1
-
-        # Create D
-        #   am is 1 row matrix of binomial coefficients
-        am = np.array([binom(deg, i) for i in range(deg + 1)])
-
-        # bm is matrix of 1's and -1's (based on index)
-        bm = (-1 + 2*np.mod(np.sum(np.indices((1, deg+1)), axis=0).flatten(), 2 * np.ones((deg+1))))
-
-        # D is binomial coefficients scaled by matrix of 1's and -1's (scalar of two from differentiation)
-        D = 2*am*bm
-
-        # Create E
-        E = np.arange(deg, -1, -1)
-
-        # Create F
-        F = np.arange(deg + 1)
-
-        # Function to create A matrix in Ax=b (using each input from above (A, B, C))
-        def A_fn(ts, A_, B_, C_):
-            return sum([A_ * (t - 1) ** B_ * t ** C_ for t in ts])
-
-        def b_fn(ts, ds, D_, E_, F_):
-            return -1.0 * sum([D_ * (t - 1) ** E_ * d * t ** F_ for t, d in zip(ts, ds)])
-
-        # Matrix A
-        A = -1*np.array([A_fn(ts, A_, B_, C_) for A_, B_, C_ in
-            zip(A.flatten(), B.flatten(), C.flatten())]).reshape((deg+1, deg+1))
-
-        # Vector b
-        b = -1*np.array([b_fn(ts, ds, D_, E_, F_) for D_, E_, F_ in
-            zip(D.flatten(), E.flatten(), F.flatten())]).reshape((deg+1, 1))
-
-        # Solve Ax = b
-        return solve(A, b).ravel()
-
-    ts = np.linspace(0.0, 1, len(pnts))
-
-    # Fit spline through each direction independently
-    ctrl_points = np.apply_along_axis(solve_for_cs, 0, pnts, ts, deg)
-
-    return Bezier(ctrl_points)

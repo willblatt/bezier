@@ -66,6 +66,12 @@ class TestBezier(unittest.TestCase):
 
         self.assertTrue(np.allclose(test, ref))
 
+    def test_derivated(self):
+        b = Bezier([(-4.0, 0.00), (4.0, 0.00), (-2.0, 0.00), (2.0, 0.00)])
+        d = b.derivative
+
+        print(d.point(t=0.08))
+
 
 if __name__ == '__main__':
     unittest.main()
